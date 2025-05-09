@@ -60,6 +60,19 @@ export class OctoberAccessory extends AbstractAccessory {
         }
     }
 
+    private mapTargetCharacteristicToMode(value: number) {
+        switch (value) {
+            case 3: // Auto
+                return Mode.Auto;
+            case 0: // Off
+                return Mode.Off;
+            case 1: // Heat
+                return Mode.On;
+            default:
+                return Mode.Off;
+        }
+    }
+
     private mapModeToCurrentCharacteristic(mode: Mode) {
         switch (mode) {
             case Mode.Auto:
@@ -88,7 +101,9 @@ export class OctoberAccessory extends AbstractAccessory {
     setTargetHeatingCoolingState(value) {
         this.platform.log.debug('Set target mode:', value);
 
-        // return this.mapModeToTargetCharacteristic(value);
+        const mappedValue = this.mapTargetCharacteristicToMode(value);
+
+        this.serialInterface.setState(mappedValue, undefined);
     }
 
     getCurrentTemperature() {
@@ -114,6 +129,8 @@ export class OctoberAccessory extends AbstractAccessory {
 
     setTargetTemperature(value) {
         this.platform.log.debug('Set target int temperature:', value);
+
+        this.serialInterface.setState(undefined, Math.floor(value));
     }
 
     // Misc

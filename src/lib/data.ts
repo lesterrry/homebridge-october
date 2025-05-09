@@ -15,7 +15,7 @@ export type SerialResponse = {
 
 function parseModeString(value: string): Mode {
     const numValue = Number(value);
-    
+
     if (isNaN(numValue) || !Object.values(Mode).includes(numValue)) {
         throw new Error(`Invalid Mode value: ${value}`);
     }
@@ -25,7 +25,7 @@ function parseModeString(value: string): Mode {
 
 function parseNumericValue(value: string, min: number, max: number): number {
     const numValue = Number(value);
-    
+
     if (isNaN(numValue) || !isFinite(numValue) || numValue < min || numValue > max) {
         throw new Error(`Invalid numeric value: ${value}`);
     }
@@ -57,3 +57,7 @@ export function parseResponseString(response: string): SerialResponse {
         extHumid,
     }
 };
+
+export function makeRequestString(modeValue: number, tempValue: number) {
+    return String(modeValue) + ';' + String(tempValue);
+}
