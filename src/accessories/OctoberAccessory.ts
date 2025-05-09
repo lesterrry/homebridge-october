@@ -37,6 +37,9 @@ export class OctoberAccessory extends AbstractAccessory {
         this.primaryService.getCharacteristic(this.Characteristic.CurrentTemperature)
             .onGet(this.getCurrentTemperature.bind(this));
 
+        this.primaryService.getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+            .onGet(this.getCurrentHumidity.bind(this));
+
         this.primaryService.getCharacteristic(this.Characteristic.TargetTemperature)
             .onGet(this.getTargetTemperature.bind(this))
             .onSet(this.setTargetTemperature.bind(this));
@@ -91,6 +94,13 @@ export class OctoberAccessory extends AbstractAccessory {
     getCurrentTemperature() {
         const value = this.serialInterface.getState().intTemp;
         this.platform.log.debug('Get current int temperature:', value);
+
+        return value;
+    }
+
+    getCurrentHumidity() {
+        const value = this.serialInterface.getState().intHumid;
+        this.platform.log.debug('Get current int humidity:', value);
 
         return value;
     }

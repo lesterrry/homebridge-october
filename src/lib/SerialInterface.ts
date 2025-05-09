@@ -41,13 +41,13 @@ export default class SerialInterface {
                 return parsed;
             } catch (error) {
                 this.logging.error('ERR: ' + (error instanceof Error ? error.message : String(error)));
-
-                this.cachedResponse = {
-                    time: Date.now(),
-                    data: undefined,
-                };
             }
         }
+
+        this.cachedResponse = {
+            time: Date.now(),
+            data: undefined,
+        };
 
         throw new Error('Failed to obtain data');
     }
