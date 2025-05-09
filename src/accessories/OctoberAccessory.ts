@@ -2,114 +2,119 @@ import { PlatformAccessory, Service, UnknownContext } from 'homebridge';
 
 import { OctoberPlatform } from '../platform';
 import { AbstractAccessory } from './AbstractAccessory';
+import SerialInterface from '../lib/SerialInterface';
+import { Mode } from '../lib/data';
 
 export interface State {
-  temperature: number;
-  mode: number;
+    temperature: number;
+    mode: number;
 }
 
 export class OctoberAccessory extends AbstractAccessory {
-  private readonly _primaryService: Service;
+    private readonly primaryService: Service;
 
-  private _state: State = {temperature: 23, mode: this.Characteristic.TargetHeatingCoolingState.OFF};
+    private serialInterface: SerialInterface;
 
-  constructor(
-    protected readonly platform: OctoberPlatform,
-    protected readonly accessory: PlatformAccessory,
-    protected readonly data: UnknownContext,
-  ) {
-    super(platform, accessory, data);
+    constructor(
+        protected readonly platform: OctoberPlatform,
+        protected readonly accessory: PlatformAccessory,
+        protected readonly data: UnknownContext,
+    ) {
+        super(platform, accessory, data);
 
-    this._primaryService = this.accessory.getService(this.platform.api.hap.Service.Thermostat) || this.accessory.addService(
-      this.platform.api.hap.Service.Thermostat);
+        this.serialInterface = this.platform._serialInterface;
 
-    this._primaryService.getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
+        this.primaryService = this.accessory.getService(this.platform.api.hap.Service.Thermostat) || this.accessory.addService(
+            this.platform.api.hap.Service.Thermostat);
 
-    this._primaryService.getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-      .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
-      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
+        this.primaryService.getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+            .onGet(this.getCurrentHeatingCoolingState.bind(this));
 
-    this._primaryService.getCharacteristic(this.Characteristic.CurrentTemperature)
-      .onGet(this.handleCurrentTemperatureGet.bind(this));
+        this.primaryService.getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+            .onGet(this.getTargetHeatingCoolingState.bind(this))
+            .onSet(this.setTargetHeatingCoolingState.bind(this));
 
-    this._primaryService.getCharacteristic(this.Characteristic.TargetTemperature)
-      .onGet(this.handleTargetTemperatureGet.bind(this))
-      .onSet(this.handleTargetTemperatureSet.bind(this));
+        this.primaryService.getCharacteristic(this.Characteristic.CurrentTemperature)
+            .onGet(this.getCurrentTemperature.bind(this));
 
-    this._primaryService.getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
-      .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
-      .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
-  }
+        this.primaryService.getCharacteristic(this.Characteristic.TargetTemperature)
+            .onGet(this.getTargetTemperature.bind(this))
+            .onSet(this.setTargetTemperature.bind(this));
 
-  /**
-   * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
-   */
-  handleCurrentHeatingCoolingStateGet() {
-    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
+        this.primaryService.getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+            .onGet(this.getTemperatureDisplayUnits.bind(this))
+            .onSet(this.setTemperatureDisplayUnits.bind(this));
+    }
 
-    return this._state.mode;
-  }
+    private mapModeToTargetCharacteristic(mode: Mode) {
+        switch (mode) {
+            case Mode.Auto:
+                return this.Characteristic.TargetHeatingCoolingState.AUTO;
+            case Mode.Off:
+                return this.Characteristic.TargetHeatingCoolingState.OFF;
+            case Mode.On:
+                return this.Characteristic.TargetHeatingCoolingState.HEAT;
+        }
+    }
 
-  /**
-   * Handle requests to get the current value of the "Target Heating Cooling State" characteristic
-   */
-  handleTargetHeatingCoolingStateGet() {
-    this.platform.log.debug('Triggered GET TargetHeatingCoolingState');
+    private mapModeToCurrentCharacteristic(mode: Mode) {
+        switch (mode) {
+            case Mode.Auto:
+                return this.Characteristic.CurrentHeatingCoolingState.HEAT;
+            case Mode.Off:
+                return this.Characteristic.CurrentHeatingCoolingState.OFF;
+            case Mode.On:
+                return this.Characteristic.CurrentHeatingCoolingState.HEAT;
+        }
+    }
 
-    return this._state.mode;
-  }
+    getCurrentHeatingCoolingState() {
+        const value = this.serialInterface.getState().mode;
+        this.platform.log.debug('Get current mode:', value);
 
-  /**
-   * Handle requests to set the "Target Heating Cooling State" characteristic
-   */
-  handleTargetHeatingCoolingStateSet(value) {
-    this.platform.log.debug('Triggered SET TargetHeatingCoolingState:', value);
+        return this.mapModeToCurrentCharacteristic(value);
+    }
 
-    this._state.mode = value;
-  }
+    getTargetHeatingCoolingState() {
+        const value = this.serialInterface.getState().mode;
+        this.platform.log.debug('Get target mode:', value);
 
-  /**
-   * Handle requests to get the current value of the "Current Temperature" characteristic
-   */
-  handleCurrentTemperatureGet() {
-    this.platform.log.debug('Triggered GET CurrentTemperature');
+        return this.mapModeToTargetCharacteristic(value);
+    }
 
-    return this._state.temperature;
-  }
+    setTargetHeatingCoolingState(value) {
+        this.platform.log.debug('Set target mode:', value);
 
+        // return this.mapModeToTargetCharacteristic(value);
+    }
 
-  /**
-   * Handle requests to get the current value of the "Target Temperature" characteristic
-   */
-  handleTargetTemperatureGet() {
-    this.platform.log.debug('Triggered GET TargetTemperature');
+    getCurrentTemperature() {
+        const value = this.serialInterface.getState().intTemp;
+        this.platform.log.debug('Get current int temperature:', value);
 
-    return this._state.temperature;
-  }
+        return value;
+    }
 
-  /**
-   * Handle requests to set the "Target Temperature" characteristic
-   */
-  handleTargetTemperatureSet(value) {
-    this.platform.log.debug('Triggered SET TargetTemperature:', value);
+    getTargetTemperature() {
+        const value = this.serialInterface.getState().setTemp;
+        this.platform.log.debug('Get target int temperature:', value);
 
-    this._state.temperature = value;
-  }
+        return value;
+    }
 
-  /**
-   * Handle requests to get the current value of the "Temperature Display Units" characteristic
-   */
-  handleTemperatureDisplayUnitsGet() {
-    this.platform.log.debug('Triggered GET TemperatureDisplayUnits');
+    setTargetTemperature(value) {
+        this.platform.log.debug('Set target int temperature:', value);
+    }
 
-    return this.Characteristic.TemperatureDisplayUnits.CELSIUS;
-  }
+    // Misc
 
-  /**
-   * Handle requests to set the "Temperature Display Units" characteristic
-   */
-  handleTemperatureDisplayUnitsSet(value) {
-    this.platform.log.debug('Triggered SET TemperatureDisplayUnits:', value);
-  }
+    getTemperatureDisplayUnits() {
+        this.platform.log.debug('Set temperature display units');
+
+        return this.Characteristic.TemperatureDisplayUnits.CELSIUS;
+    }
+
+    setTemperatureDisplayUnits(value) {
+        this.platform.log.debug('Get temperature display units', value);
+    }
 }

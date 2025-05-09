@@ -1,8 +1,8 @@
-import {AbstractAccessory} from './AbstractAccessory';
-import {OctoberAccessory} from './OctoberAccessory';
+import { AbstractAccessory } from './AbstractAccessory';
+import { OctoberAccessory } from './OctoberAccessory';
 
 export {
-  AbstractAccessory,
+    AbstractAccessory,
 
-  OctoberAccessory,
+    OctoberAccessory,
 };

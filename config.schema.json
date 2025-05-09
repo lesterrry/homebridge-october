@@ -1,8 +1,8 @@
 {
-  "pluginAlias": "AqaraIrController",
+  "pluginAlias": "October",
   "pluginType": "platform",
-  "headerDisplay": "This plugin is currently experimental and under development.",
-  "footerDisplay": "For help please see the [homepage](https://github.com/vaxter/homebridge-aqara-ir-controller)",
+  "headerDisplay": "Plugin for personal use",
+  "footerDisplay": "[Homepage](https://github.com/lesterrry/homebridge-october)",
   "singular": true,
   "customUi": false,
   "schema": {

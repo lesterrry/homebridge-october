@@ -1,21 +1,21 @@
 {
   "displayName": "Homebridge October Heater Plugin",
   "name": "homebridge-october",
-  "version": "2.0.0",
-  "description": "A simple plugin that exposes Aqara Ir AC control as a Thermostat",
+  "version": "0.1.0",
+  "description": "Plugin for personal use",
   "license": "MIT",
-  "homepage": "https://github.com/lesterrry/Homebridge-Aqara-IR-Controller",
+  "homepage": "https://github.com/lesterrry/homebridge-october",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lesterrry/Homebridge-Aqara-IR-Controller.git"
+    "url": "https://github.com/lesterrry/homebridge-october"
   },
   "bugs": {
-    "url": "https://github.com/lesterrry/Homebridge-Aqara-IR-Controller/issues"
+    "url": "https://github.com/lesterrry/homebridge-october/issues"
   },
   "author": "lesterrry",
   "engines": {
-    "node": ">=10.17.0",
-    "homebridge": ">=1.0.0"
+    "node": ">=22.0.0",
+    "homebridge": ">=1.9.0"
   },
   "main": "dist/index.js",
   "scripts": {
@@ -32,7 +32,8 @@
   ],
   "dependencies": {
     "axios": "^0.21.4",
-    "homebridge-lib": "^7.1.5"
+    "homebridge-lib": "^7.1.5",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^8.56.0",
