@@ -3,7 +3,7 @@ import { PlatformAccessory, Service, UnknownContext } from 'homebridge';
 import { OctoberPlatform } from '../platform';
 import { AbstractAccessory } from './AbstractAccessory';
 import SerialInterface from '../lib/SerialInterface';
-import { Mode } from '../lib/data';
+import { Mode, State as CurrentState } from '../lib/data';
 
 export interface State {
     temperature: number;
@@ -73,22 +73,20 @@ export class OctoberAccessory extends AbstractAccessory {
         }
     }
 
-    private mapModeToCurrentCharacteristic(mode: Mode) {
-        switch (mode) {
-            case Mode.Auto:
+    private mapModeToCurrentCharacteristic(state: CurrentState) {
+        switch (state) {
+            case CurrentState.On:
                 return this.Characteristic.CurrentHeatingCoolingState.HEAT;
-            case Mode.Off:
+            case CurrentState.Off:
                 return this.Characteristic.CurrentHeatingCoolingState.OFF;
-            case Mode.On:
-                return this.Characteristic.CurrentHeatingCoolingState.HEAT;
         }
     }
 
     getCurrentHeatingCoolingState() {
-        const value = this.serialInterface.getState().mode;
-        this.platform.log.debug('Get current mode:', value);
+        const state = this.serialInterface.getState().state;
+        this.platform.log.debug('Get current state:', state);
 
-        return this.mapModeToCurrentCharacteristic(value);
+        return this.mapModeToCurrentCharacteristic(state);
     }
 
     getTargetHeatingCoolingState() {

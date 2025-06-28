@@ -26,7 +26,7 @@ export class OctoberPlatform implements DynamicPlatformPlugin {
         public readonly config: PlatformConfig,
         public readonly api: API,
     ) {
-        this._serialInterface = new SerialInterface(30, log);
+        this._serialInterface = new SerialInterface(30, log, 3);
 
         this.api.on(APIEvent.DID_FINISH_LAUNCHING, () => {
             this.log.debug('Executed didFinishLaunching callback');

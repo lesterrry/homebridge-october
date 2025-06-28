@@ -4,14 +4,17 @@ import { execSync } from 'child_process';
 import { makeRequestString, Mode, parseResponseString, SerialResponse } from './data';
 
 export default class SerialInterface {
+    protected ttl: number; // in seconds
+    protected logging: Logging;
+    protected errorTolerance: number;
+
     private cachedResponse: { time: number, data: SerialResponse | undefined } | undefined;
+    private errorCount: number = 0;
 
-    private ttl: number; // in seconds
-    private logging: Logging;
-
-    constructor(ttl: number, logging: Logging) {
+    constructor(ttl: number, logging: Logging, errorTolerance: number) {
         this.ttl = ttl;
         this.logging = logging;
+        this.errorTolerance = errorTolerance;
     }
 
     getState(): SerialResponse {
@@ -53,9 +56,17 @@ export default class SerialInterface {
                 data: parsed,
             };
 
+            this.errorCount = 0;
+
             return parsed;
         } catch (error) {
             this.logging.error('ERR: ' + (error instanceof Error ? error.message : String(error)));
+
+            if (this.cachedResponse?.data && this.errorCount < this.errorTolerance) {
+                this.errorCount++;
+
+                return this.cachedResponse.data;
+            }
         }
 
         this.cachedResponse = {

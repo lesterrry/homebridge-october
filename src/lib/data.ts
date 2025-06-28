@@ -4,8 +4,14 @@ export enum Mode {
     Off = 2
 }
 
+export enum State {
+    On = 1,
+    Off = 0
+}
+
 export type SerialResponse = {
     mode: Mode,
+    state: State,
     setTemp: number,
     intTemp: number,
     extTemp: number,
@@ -20,7 +26,17 @@ function parseModeString(value: string): Mode {
         throw new Error(`Invalid Mode value: ${value}`);
     }
 
-    return numValue as Mode;
+    return numValue;
+}
+
+function parseCurrentStateString(value: string): State {
+    const numValue = Number(value);
+
+    if (isNaN(numValue) || !Object.values(State).includes(numValue)) {
+        throw new Error(`Invalid State value: ${value}`);
+    }
+
+    return numValue;
 }
 
 function parseNumericValue(value: string, min: number, max: number): number {
@@ -37,11 +53,12 @@ function parseNumericValue(value: string, min: number, max: number): number {
 export function parseResponseString(response: string): SerialResponse {
     const split = response.split(';');
 
-    if (split.length != 6) throw Error('Wrong number of props');
+    if (split.length != 7) throw Error('Wrong number of props');
 
-    const [modeString, setTempString, intTempString, extTempString, intHumidString, extHumidString] = split;
+    const [modeString, currentStateString, setTempString, intTempString, extTempString, intHumidString, extHumidString] = split;
 
     const mode = parseModeString(modeString);
+    const state = parseCurrentStateString(currentStateString);
     const setTemp = parseNumericValue(setTempString, 10, 30);
     const intTemp = parseNumericValue(intTempString, -40, 40);
     const extTemp = parseNumericValue(extTempString, -40, 40);
@@ -50,6 +67,7 @@ export function parseResponseString(response: string): SerialResponse {
 
     return {
         mode,
+        state,
         setTemp,
         intTemp,
         extTemp,
