@@ -1,8 +1,7 @@
 {
   "pluginAlias": "October",
   "pluginType": "platform",
-  "headerDisplay": "Plugin for personal use",
-  "footerDisplay": "[Homepage](https://github.com/lesterrry/homebridge-october)",
+  "headerDisplay": "USB Serial thermostat October",
   "singular": true,
   "customUi": false,
   "schema": {
@@ -12,74 +11,27 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "AqaraIrController"
+        "default": "October"
       },
-      "region": {
-        "title": "API server region",
+      "commandPath": {
+        "title": "Path to the October executable",
         "type": "string",
-        "required": true,
-        "enum": [
-          "cn",
-          "us",
-          "kr",
-          "ru",
-          "de",
-          "sg"
-        ],
-        "default": "cn",
-        "description": "Select region of Aqara API server"
+        "minLength": 1,
+        "default": "/home/volchok/bin/october"
       },
-      "lang": {
-        "title": "API response Language",
-        "type": "string",
-        "required": true,
-        "enum": [
-          "en",
-          "zh"
-        ],
-        "default": "en",
-        "description": "Select language of the API response"
+      "pollInterval": {
+        "title": "Polling interval (seconds)",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3600,
+        "default": 30
       },
-      "appId": {
-        "title": "AppId",
-        "type": "string",
-        "required": true
-      },
-      "keyId": {
-        "title": "KeyId",
-        "type": "string",
-        "required": true
-      },
-      "appKey": {
-        "title": "appKey",
-        "type": "string",
-        "required": true
-      },
-      "version": {
-        "title": "appKey",
-        "type": "string",
-        "default": "v3.0",
-        "required": true
-      },
-      "username": {
-        "title": "Aqara username, email or mobile number",
-        "type": "string",
-        "required": true
-      },
-      "positionId": {
-        "title": "positionId of Aqara Home",
-        "type": "string",
-        "required": false
-      },
-      "accessToken": {
-        "title": "Auth Token",
-        "type": "string",
-        "required": false
-      },
-      "refreshToken": {
-        "title": "Refresh Token",
-        "type": "string",
-        "required": false
+      "commandTimeout": {
+        "title": "Command timeout (milliseconds)",
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 60000,
+        "default": 2000
       }
     }
   }

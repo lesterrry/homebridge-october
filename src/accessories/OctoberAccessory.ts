@@ -1,145 +1,126 @@
-import { PlatformAccessory, Service, UnknownContext } from 'homebridge';
-
-import { OctoberPlatform } from '../platform';
+import type { CharacteristicValue, PlatformAccessory, Service, UnknownContext } from 'homebridge';
+import { State as CurrentState, Mode, SENSOR_TEMPERATURE, type SerialResponse, TARGET_TEMPERATURE } from '../lib/data';
+import type { OctoberPlatform } from '../platform';
 import { AbstractAccessory } from './AbstractAccessory';
-import SerialInterface from '../lib/SerialInterface';
-import { Mode, State as CurrentState } from '../lib/data';
-
-export interface State {
-    temperature: number;
-    mode: number;
-}
 
 export class OctoberAccessory extends AbstractAccessory {
-    private readonly primaryService: Service;
+  private readonly primaryService: Service;
 
-    private serialInterface: SerialInterface;
+  constructor(
+    protected readonly platform: OctoberPlatform,
+    protected readonly accessory: PlatformAccessory,
+    protected readonly data: UnknownContext,
+  ) {
+    super(platform, accessory, data);
+    this.primaryService =
+      this.accessory.getService(this.Service.Thermostat) || this.accessory.addService(this.Service.Thermostat);
 
-    constructor(
-        protected readonly platform: OctoberPlatform,
-        protected readonly accessory: PlatformAccessory,
-        protected readonly data: UnknownContext,
+    this.primaryService
+      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+      .setProps({
+        maxValue: this.Characteristic.CurrentHeatingCoolingState.HEAT,
+        validValues: [
+          this.Characteristic.CurrentHeatingCoolingState.OFF,
+          this.Characteristic.CurrentHeatingCoolingState.HEAT,
+        ],
+      })
+      .onGet(async () => this.mapCurrentState((await this.getState()).state));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+      .setProps({
+        maxValue: this.Characteristic.TargetHeatingCoolingState.HEAT,
+        validValues: [
+          this.Characteristic.TargetHeatingCoolingState.OFF,
+          this.Characteristic.TargetHeatingCoolingState.HEAT,
+        ],
+      })
+      .onGet(async () => this.mapMode((await this.getState()).mode))
+      .onSet(this.setTargetHeatingCoolingState.bind(this));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
+      .setProps(SENSOR_TEMPERATURE)
+      .onGet(async () => this.sensorValue((await this.getState()).intTemp));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+      .onGet(async () => this.sensorValue((await this.getState()).intHumid));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.TargetTemperature)
+      .setProps(TARGET_TEMPERATURE)
+      .onGet(async () => (await this.getState()).setTemp)
+      .onSet(this.setTargetTemperature.bind(this));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
+      .setProps({ validValues: [this.Characteristic.TemperatureDisplayUnits.CELSIUS] })
+      .onGet(() => this.Characteristic.TemperatureDisplayUnits.CELSIUS);
+
+    this.serialInterface.on('state', (state: SerialResponse) => this.updateState(state));
+    this.serialInterface.on('unavailable', () => this.updateState());
+  }
+
+  private mapMode(mode: Mode): number {
+    switch (mode) {
+      case Mode.Auto:
+      case Mode.On:
+        return this.Characteristic.TargetHeatingCoolingState.HEAT;
+      case Mode.Off:
+        return this.Characteristic.TargetHeatingCoolingState.OFF;
+    }
+  }
+
+  private mapTargetMode(value: CharacteristicValue): Mode {
+    switch (value) {
+      case this.Characteristic.TargetHeatingCoolingState.OFF:
+        return Mode.Off;
+      case this.Characteristic.TargetHeatingCoolingState.HEAT:
+        return Mode.Auto;
+      default:
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+    }
+  }
+
+  private mapCurrentState(state: CurrentState): number {
+    return state === CurrentState.On
+      ? this.Characteristic.CurrentHeatingCoolingState.HEAT
+      : this.Characteristic.CurrentHeatingCoolingState.OFF;
+  }
+
+  private async setTargetHeatingCoolingState(value: CharacteristicValue): Promise<void> {
+    const mode = this.mapTargetMode(value);
+    try {
+      await this.serialInterface.setState(mode);
+    } catch {
+      throw this.communicationError();
+    }
+  }
+
+  private async setTargetTemperature(value: CharacteristicValue): Promise<void> {
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      value < TARGET_TEMPERATURE.minValue ||
+      value > TARGET_TEMPERATURE.maxValue
     ) {
-        super(platform, accessory, data);
-
-        this.serialInterface = this.platform._serialInterface;
-
-        this.primaryService = this.accessory.getService(this.platform.api.hap.Service.Thermostat) || this.accessory.addService(
-            this.platform.api.hap.Service.Thermostat);
-
-        this.primaryService.getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-            .onGet(this.getCurrentHeatingCoolingState.bind(this));
-
-        this.primaryService.getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-            .onGet(this.getTargetHeatingCoolingState.bind(this))
-            .onSet(this.setTargetHeatingCoolingState.bind(this));
-
-        this.primaryService.getCharacteristic(this.Characteristic.CurrentTemperature)
-            .onGet(this.getCurrentTemperature.bind(this));
-
-        this.primaryService.getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
-            .onGet(this.getCurrentHumidity.bind(this));
-
-        this.primaryService.getCharacteristic(this.Characteristic.TargetTemperature)
-            .onGet(this.getTargetTemperature.bind(this))
-            .onSet(this.setTargetTemperature.bind(this));
-
-        this.primaryService.getCharacteristic(this.Characteristic.TemperatureDisplayUnits)
-            .onGet(this.getTemperatureDisplayUnits.bind(this))
-            .onSet(this.setTemperatureDisplayUnits.bind(this));
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
     }
-
-    private mapModeToTargetCharacteristic(mode: Mode) {
-        switch (mode) {
-            case Mode.Auto:
-                return this.Characteristic.TargetHeatingCoolingState.AUTO;
-            case Mode.Off:
-                return this.Characteristic.TargetHeatingCoolingState.OFF;
-            case Mode.On:
-                return this.Characteristic.TargetHeatingCoolingState.HEAT;
-        }
+    try {
+      await this.serialInterface.setState(undefined, value);
+    } catch {
+      throw this.communicationError();
     }
+  }
 
-    private mapTargetCharacteristicToMode(value: number) {
-        switch (value) {
-            case 3: // Auto
-                return Mode.Auto;
-            case 0: // Off
-                return Mode.Off;
-            case 1: // Heat
-                return Mode.On;
-            default:
-                return Mode.Off;
-        }
-    }
-
-    private mapModeToCurrentCharacteristic(state: CurrentState) {
-        switch (state) {
-            case CurrentState.On:
-                return this.Characteristic.CurrentHeatingCoolingState.HEAT;
-            case CurrentState.Off:
-                return this.Characteristic.CurrentHeatingCoolingState.OFF;
-        }
-    }
-
-    getCurrentHeatingCoolingState() {
-        const state = this.serialInterface.getState().state;
-        this.platform.log.debug('Get current state:', state);
-
-        return this.mapModeToCurrentCharacteristic(state);
-    }
-
-    getTargetHeatingCoolingState() {
-        const value = this.serialInterface.getState().mode;
-        this.platform.log.debug('Get target mode:', value);
-
-        return this.mapModeToTargetCharacteristic(value);
-    }
-
-    setTargetHeatingCoolingState(value) {
-        this.platform.log.debug('Set target mode:', value);
-
-        const mappedValue = this.mapTargetCharacteristicToMode(value);
-
-        this.serialInterface.setState(mappedValue, undefined);
-    }
-
-    getCurrentTemperature() {
-        const value = this.serialInterface.getState().intTemp;
-        this.platform.log.debug('Get current int temperature:', value);
-
-        return value;
-    }
-
-    getCurrentHumidity() {
-        const value = this.serialInterface.getState().intHumid;
-        this.platform.log.debug('Get current int humidity:', value);
-
-        return value;
-    }
-
-    getTargetTemperature() {
-        const value = this.serialInterface.getState().setTemp;
-        this.platform.log.debug('Get target int temperature:', value);
-
-        return value;
-    }
-
-    setTargetTemperature(value) {
-        this.platform.log.debug('Set target int temperature:', value);
-
-        this.serialInterface.setState(undefined, Math.floor(value));
-    }
-
-    // Misc
-
-    getTemperatureDisplayUnits() {
-        this.platform.log.debug('Set temperature display units');
-
-        return this.Characteristic.TemperatureDisplayUnits.CELSIUS;
-    }
-
-    setTemperatureDisplayUnits(value) {
-        this.platform.log.debug('Get temperature display units', value);
-    }
+  private updateState(state?: SerialResponse): void {
+    const error = this.communicationError();
+    this.primaryService
+      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
+      .updateValue(state ? this.mapCurrentState(state.state) : error);
+    this.primaryService
+      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+      .updateValue(state ? this.mapMode(state.mode) : error);
+    this.primaryService.getCharacteristic(this.Characteristic.TargetTemperature).updateValue(state?.setTemp ?? error);
+    this.primaryService.getCharacteristic(this.Characteristic.CurrentTemperature).updateValue(state?.intTemp ?? error);
+    this.primaryService
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+      .updateValue(state?.intHumid ?? error);
+  }
 }

@@ -1,59 +1,43 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
-import { OctoberPlatform } from '../platform';
-import SerialInterface from '../lib/SerialInterface';
+import type { PlatformAccessory, Service } from 'homebridge';
+import { SENSOR_TEMPERATURE, type SerialResponse } from '../lib/data';
+import type { OctoberPlatform } from '../platform';
 import { AbstractAccessory } from './AbstractAccessory';
 
 export class OctoberExtTempAccessory extends AbstractAccessory {
-    private temperatureService: Service;
-    private humidityService: Service;
+  private readonly temperatureService: Service;
+  private readonly humidityService: Service;
 
-    private serialInterface: SerialInterface;
+  constructor(
+    protected readonly platform: OctoberPlatform,
+    protected readonly accessory: PlatformAccessory,
+  ) {
+    super(platform, accessory);
+    this.temperatureService =
+      this.accessory.getService(this.Service.TemperatureSensor) ||
+      this.accessory.addService(this.Service.TemperatureSensor);
+    this.temperatureService.setCharacteristic(this.Characteristic.Name, 'Temperature');
+    this.temperatureService
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
+      .setProps(SENSOR_TEMPERATURE)
+      .onGet(async () => this.sensorValue((await this.getState()).extTemp));
 
-    constructor(
-        protected readonly platform: OctoberPlatform,
-        protected readonly accessory: PlatformAccessory,
-    ) {
-        super(platform, accessory);
+    this.humidityService =
+      this.accessory.getService(this.Service.HumiditySensor) || this.accessory.addService(this.Service.HumiditySensor);
+    this.humidityService.setCharacteristic(this.Characteristic.Name, 'Humidity');
+    this.humidityService
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+      .onGet(async () => this.sensorValue((await this.getState()).extHumid));
 
-        this.serialInterface = this.platform._serialInterface;
+    this.serialInterface.on('state', (state: SerialResponse) => this.updateState(state));
+    this.serialInterface.on('unavailable', () => this.updateState());
+  }
 
-        this.temperatureService = this.accessory.getService(this.platform.api.hap.Service.TemperatureSensor) ||
-            this.accessory.addService(this.platform.api.hap.Service.TemperatureSensor);
-
-        this.temperatureService.setCharacteristic(
-            this.platform.api.hap.Characteristic.Name,
-            'Temperature',
-        );
-
-        // Set up characteristics for temperature
-        this.temperatureService.getCharacteristic(this.platform.api.hap.Characteristic.CurrentTemperature)
-            .onGet(this.getTemperature.bind(this));
-
-        // Humidity Sensor service
-        this.humidityService = this.accessory.getService(this.platform.api.hap.Service.HumiditySensor) ||
-            this.accessory.addService(this.platform.api.hap.Service.HumiditySensor);
-
-        this.humidityService.setCharacteristic(
-            this.platform.api.hap.Characteristic.Name,
-            'Humidity',
-        );
-
-        // Set up characteristics for humidity
-        this.humidityService.getCharacteristic(this.platform.api.hap.Characteristic.CurrentRelativeHumidity)
-            .onGet(this.getHumidity.bind(this));
-    }
-
-    getTemperature(): CharacteristicValue {
-        const value = (this.serialInterface.getState()).extTemp;
-        this.platform.log.debug('Get current ext temperature:', value);
-
-        return value;
-    }
-
-    getHumidity(): CharacteristicValue {
-        const value = (this.serialInterface.getState()).extHumid;
-        this.platform.log.debug('Get current ext humidity:', value);
-
-        return value;
-    }
+  private updateState(state?: SerialResponse): void {
+    this.temperatureService
+      .getCharacteristic(this.Characteristic.CurrentTemperature)
+      .updateValue(state?.extTemp ?? this.communicationError());
+    this.humidityService
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+      .updateValue(state?.extHumid ?? this.communicationError());
+  }
 }
