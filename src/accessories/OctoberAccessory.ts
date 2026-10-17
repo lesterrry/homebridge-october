@@ -5,6 +5,7 @@ import { AbstractAccessory } from './AbstractAccessory';
 
 export class OctoberAccessory extends AbstractAccessory {
   private readonly primaryService: Service;
+  private readonly humidityService: Service;
 
   constructor(
     protected readonly platform: OctoberPlatform,
@@ -12,39 +13,51 @@ export class OctoberAccessory extends AbstractAccessory {
     protected readonly data: UnknownContext,
   ) {
     super(platform, accessory, data);
+    const legacyService = this.accessory.getService(this.Service.Thermostat);
+    if (legacyService) {
+      this.accessory.removeService(legacyService);
+      this.platform.log.info('Migrating October from Thermostat to HeaterCooler');
+    }
     this.primaryService =
-      this.accessory.getService(this.Service.Thermostat) || this.accessory.addService(this.Service.Thermostat);
+      this.accessory.getService(this.Service.HeaterCooler) || this.accessory.addService(this.Service.HeaterCooler);
+    this.primaryService.setPrimaryService();
 
     this.primaryService
-      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-      .setProps({
-        maxValue: this.Characteristic.CurrentHeatingCoolingState.HEAT,
-        validValues: [
-          this.Characteristic.CurrentHeatingCoolingState.OFF,
-          this.Characteristic.CurrentHeatingCoolingState.HEAT,
-        ],
-      })
-      .onGet(async () => this.mapCurrentState((await this.getState()).state));
+      .getCharacteristic(this.Characteristic.Active)
+      .onGet(async () => this.mapActive((await this.getState()).mode))
+      .onSet(this.setActive.bind(this));
     this.primaryService
-      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
+      .getCharacteristic(this.Characteristic.CurrentHeaterCoolerState)
       .setProps({
-        maxValue: this.Characteristic.TargetHeatingCoolingState.HEAT,
+        maxValue: this.Characteristic.CurrentHeaterCoolerState.HEATING,
         validValues: [
-          this.Characteristic.TargetHeatingCoolingState.OFF,
-          this.Characteristic.TargetHeatingCoolingState.HEAT,
+          this.Characteristic.CurrentHeaterCoolerState.INACTIVE,
+          this.Characteristic.CurrentHeaterCoolerState.IDLE,
+          this.Characteristic.CurrentHeaterCoolerState.HEATING,
         ],
       })
-      .onGet(async () => this.mapMode((await this.getState()).mode))
-      .onSet(this.setTargetHeatingCoolingState.bind(this));
+      .onGet(async () => this.mapCurrentState(await this.getState()));
+    this.primaryService
+      .getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+      .updateValue(this.Characteristic.TargetHeaterCoolerState.HEAT)
+      .setProps({
+        minValue: this.Characteristic.TargetHeaterCoolerState.HEAT,
+        maxValue: this.Characteristic.TargetHeaterCoolerState.HEAT,
+        validValues: [this.Characteristic.TargetHeaterCoolerState.HEAT],
+      })
+      .onGet(() => this.Characteristic.TargetHeaterCoolerState.HEAT)
+      .onSet((value) => {
+        if (value !== this.Characteristic.TargetHeaterCoolerState.HEAT) {
+          throw this.invalidValueError();
+        }
+      });
     this.primaryService
       .getCharacteristic(this.Characteristic.CurrentTemperature)
       .setProps(SENSOR_TEMPERATURE)
       .onGet(async () => this.sensorValue((await this.getState()).intTemp));
     this.primaryService
-      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
-      .onGet(async () => this.sensorValue((await this.getState()).intHumid));
-    this.primaryService
-      .getCharacteristic(this.Characteristic.TargetTemperature)
+      .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+      .updateValue(TARGET_TEMPERATURE.minValue)
       .setProps(TARGET_TEMPERATURE)
       .onGet(async () => (await this.getState()).setTemp)
       .onSet(this.setTargetTemperature.bind(this));
@@ -53,39 +66,40 @@ export class OctoberAccessory extends AbstractAccessory {
       .setProps({ validValues: [this.Characteristic.TemperatureDisplayUnits.CELSIUS] })
       .onGet(() => this.Characteristic.TemperatureDisplayUnits.CELSIUS);
 
+    this.humidityService =
+      this.accessory.getService(this.Service.HumiditySensor) ||
+      this.accessory.addService(this.Service.HumiditySensor, 'Humidity');
+    this.humidityService
+      .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
+      .onGet(async () => this.sensorValue((await this.getState()).intHumid));
+
     this.serialInterface.on('state', (state: SerialResponse) => this.updateState(state));
     this.serialInterface.on('unavailable', () => this.updateState());
+    this.updateState();
   }
 
-  private mapMode(mode: Mode): number {
-    switch (mode) {
-      case Mode.Auto:
-      case Mode.On:
-        return this.Characteristic.TargetHeatingCoolingState.HEAT;
-      case Mode.Off:
-        return this.Characteristic.TargetHeatingCoolingState.OFF;
+  private mapActive(mode: Mode): number {
+    return mode === Mode.Off ? this.Characteristic.Active.INACTIVE : this.Characteristic.Active.ACTIVE;
+  }
+
+  private mapCurrentState(state: SerialResponse): number {
+    if (state.mode === Mode.Off) {
+      return this.Characteristic.CurrentHeaterCoolerState.INACTIVE;
     }
+    return state.state === CurrentState.On
+      ? this.Characteristic.CurrentHeaterCoolerState.HEATING
+      : this.Characteristic.CurrentHeaterCoolerState.IDLE;
   }
 
-  private mapTargetMode(value: CharacteristicValue): Mode {
-    switch (value) {
-      case this.Characteristic.TargetHeatingCoolingState.OFF:
-        return Mode.Off;
-      case this.Characteristic.TargetHeatingCoolingState.HEAT:
-        return Mode.Auto;
-      default:
-        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+  private invalidValueError(): Error {
+    return new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+  }
+
+  private async setActive(value: CharacteristicValue): Promise<void> {
+    if (value !== this.Characteristic.Active.ACTIVE && value !== this.Characteristic.Active.INACTIVE) {
+      throw this.invalidValueError();
     }
-  }
-
-  private mapCurrentState(state: CurrentState): number {
-    return state === CurrentState.On
-      ? this.Characteristic.CurrentHeatingCoolingState.HEAT
-      : this.Characteristic.CurrentHeatingCoolingState.OFF;
-  }
-
-  private async setTargetHeatingCoolingState(value: CharacteristicValue): Promise<void> {
-    const mode = this.mapTargetMode(value);
+    const mode = value === this.Characteristic.Active.ACTIVE ? Mode.Auto : Mode.Off;
     try {
       await this.serialInterface.setState(mode);
     } catch {
@@ -100,7 +114,7 @@ export class OctoberAccessory extends AbstractAccessory {
       value < TARGET_TEMPERATURE.minValue ||
       value > TARGET_TEMPERATURE.maxValue
     ) {
-      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+      throw this.invalidValueError();
     }
     try {
       await this.serialInterface.setState(undefined, value);
@@ -112,14 +126,16 @@ export class OctoberAccessory extends AbstractAccessory {
   private updateState(state?: SerialResponse): void {
     const error = this.communicationError();
     this.primaryService
-      .getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-      .updateValue(state ? this.mapCurrentState(state.state) : error);
+      .getCharacteristic(this.Characteristic.Active)
+      .updateValue(state ? this.mapActive(state.mode) : error);
     this.primaryService
-      .getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
-      .updateValue(state ? this.mapMode(state.mode) : error);
-    this.primaryService.getCharacteristic(this.Characteristic.TargetTemperature).updateValue(state?.setTemp ?? error);
+      .getCharacteristic(this.Characteristic.CurrentHeaterCoolerState)
+      .updateValue(state ? this.mapCurrentState(state) : error);
+    this.primaryService
+      .getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+      .updateValue(state?.setTemp ?? error);
     this.primaryService.getCharacteristic(this.Characteristic.CurrentTemperature).updateValue(state?.intTemp ?? error);
-    this.primaryService
+    this.humidityService
       .getCharacteristic(this.Characteristic.CurrentRelativeHumidity)
       .updateValue(state?.intHumid ?? error);
   }

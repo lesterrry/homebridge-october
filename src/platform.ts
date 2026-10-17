@@ -33,6 +33,7 @@ export class OctoberPlatform implements DynamicPlatformPlugin {
       this.log.debug('Executed didFinishLaunching callback');
 
       this.discoverDevices();
+      this.api.updatePlatformAccessories(Object.values(this._accessories));
       this._serialInterface.startPolling();
     });
     this.api.on(APIEvent.SHUTDOWN, () => this._serialInterface.stopPolling());

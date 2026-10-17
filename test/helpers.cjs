@@ -16,18 +16,23 @@ function createSerial(handler, options = {}) {
   return serial;
 }
 
-function createAccessories(serial) {
+function createAccessories(serial, cachedAccessory) {
   const api = new HomebridgeAPI();
   const { Service, Characteristic, uuid, Categories } = api.hap;
   const platform = { api, log, _serialInterface: serial };
-  const thermostat = new api.platformAccessory('October', uuid.generate('test-thermostat'), Categories.THERMOSTAT);
+  const heaterAccessory =
+    cachedAccessory ?? new api.platformAccessory('October', uuid.generate('test-thermostat'), Categories.THERMOSTAT);
   const outdoor = new api.platformAccessory('Outdoor', uuid.generate('test-outdoor'), Categories.SENSOR);
-  new OctoberAccessory(platform, thermostat, {});
+  new OctoberAccessory(platform, heaterAccessory, heaterAccessory.context);
   new OctoberExtTempAccessory(platform, outdoor);
   return {
     Characteristic,
     hap: api.hap,
-    thermostat: thermostat.getService(Service.Thermostat),
+    heaterAccessory,
+    heater: heaterAccessory.getService(Service.HeaterCooler),
+    humidity: heaterAccessory
+      .getService(Service.HumiditySensor)
+      .getCharacteristic(Characteristic.CurrentRelativeHumidity),
     outdoorTemperature: outdoor
       .getService(Service.TemperatureSensor)
       .getCharacteristic(Characteristic.CurrentTemperature),
